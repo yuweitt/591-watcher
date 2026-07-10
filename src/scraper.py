@@ -13,10 +13,15 @@ PAGE_SIZE = 30
 REQUEST_DELAY_SEC = 1.5
 MAX_PAGES = 5  # newest-first, 150 listings/run is plenty to catch what's new since the last poll
 
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-)
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+    "Referer": "https://rent.591.com.tw/",
+}
 
 NUXT_SCRIPT_RE = re.compile(r"<script[^>]*>\s*(window\.__NUXT__=.*?)</script>", re.S)
 DECODE_SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "decode_nuxt.js"
@@ -61,7 +66,7 @@ def fetch_all_listings(base_params: dict) -> list[dict]:
     params = {"order": "posttime", "orderType": "desc", **base_params}
 
     session = requests.Session()
-    session.headers["User-Agent"] = USER_AGENT
+    session.headers.update(DEFAULT_HEADERS)
 
     listings: list[dict] = []
     offset = 0
@@ -70,7 +75,9 @@ def fetch_all_listings(base_params: dict) -> list[dict]:
         page_params = {**params, "firstRow": offset}
         resp = session.get(LIST_URL, params=page_params, timeout=15)
         if resp.status_code != 200:
-            raise ScrapeError(f"591 搜尋頁回傳 HTTP {resp.status_code}")
+            raise ScrapeError(
+                f"591 搜尋頁回傳 HTTP {resp.status_code}：{resp.text[:200]!r}"
+            )
 
         state = _decode_nuxt_state(resp.text)
         try:
