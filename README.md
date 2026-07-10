@@ -65,6 +65,8 @@ git push -u origin main
 
 ## 本機測試
 
+需要 Python 3.9+ 跟 **Node.js**（爬蟲用 Node 來解析 591 頁面裡內嵌的資料，見下方「運作原理」）。macOS 可以用 `brew install node` 安裝。
+
 ```bash
 cd 591-watcher
 pip install -r requirements.txt
@@ -76,14 +78,18 @@ python -m src.main
 
 若缺少任何環境變數，程式會直接印出缺少哪個變數並結束，不會產生誤導性的錯誤。
 
+## 運作原理
+
+591 現在把搜尋結果（標題、價格、坪數、連結…）直接內嵌在頁面 HTML 裡的一段 `window.__NUXT__=(function(...){...})(...)` 腳本中，而不是走一個乾淨的公開 JSON API。`src/scraper.py` 抓下頁面後，會把這段腳本丟給 `scripts/decode_nuxt.js`（用 Node 在一個模擬的 `window` 環境下執行它），還原出真正的資料物件，再取出 `pinia['rent-list']['dataList']` 裡的物件清單。分頁靠網址上的 `firstRow` 參數，排序則預設用 `order=posttime&orderType=desc`（最新的排最前面）。
+
 ## 故障排除
 
-若 Actions 執行失敗（Actions 頁面顯示紅叉），代表 591 網站的頁面結構或 API 可能改版了，導致爬蟲抓不到預期的資料。可以：
+若 Actions 執行失敗（Actions 頁面顯示紅叉），代表 591 網站的頁面結構可能又改版了，導致爬蟲抓不到預期的資料。可以：
 
-1. 點進失敗的那次執行紀錄，看 log 裡 `Scrape failed: ...` 的錯誤訊息（會標明是哪個環節壞的：抓不到 csrf-token、API 回傳非 200、還是 JSON 欄位不符預期）
+1. 點進失敗的那次執行紀錄，看 log 裡 `Scrape failed: ...` 的錯誤訊息（會標明是哪個環節壞的：找不到內嵌的 `__NUXT__` 資料、HTTP 非 200、還是內部欄位結構變了）
 2. 依錯誤訊息去看對應的檔案：
-   - csrf-token 抓不到 → `src/session.py`
-   - API 回應格式變了 → `src/scraper.py` / `src/parser.py`
+   - 找不到 `__NUXT__` 資料、或 Node 解析失敗 → `src/scraper.py`、`scripts/decode_nuxt.js`
+   - 欄位對應錯誤（例如標題、價格抓成空的） → `src/parser.py`
 3. 修好後 push 上去，下次排程就會自動恢復正常，不用做其他事
 
 ## 專案結構
